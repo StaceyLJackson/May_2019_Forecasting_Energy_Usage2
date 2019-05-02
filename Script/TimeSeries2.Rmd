@@ -1,0 +1,220 @@
+---
+title: "TimeSeries2"
+author: "Stacey Jackson"
+date: "30/04/2019"
+output: html_document
+---
+####1. Open libraries
+```{r}
+
+install.packages(pacman)
+pacman::p_load(RMySQL, dplyr, lubridate, ggplot2,ggfortify,tidyr,plotly, forecast,zoo, padr)
+
+```
+
+```{r}
+con = dbConnect(MySQL(), user='deepAnalytics', password='Sqltask1234!', dbname='dataanalytics2018', host='data-analytics-2018.cbrosir2cswx.us-east-1.rds.amazonaws.com')
+```
+
+####2. SORT OUT THE DATASET
+Download date, time and the sub-metering attributes for each sub-meter
+```{r}
+yr_2006SELECT <- dbGetQuery(con, "SELECT Date, Time, Global_active_power, Sub_metering_1, Sub_metering_2, Sub_metering_3 FROM yr_2006")
+yr_2007SELECT <- dbGetQuery(con, "SELECT Date, Time, Global_active_power, Sub_metering_1, Sub_metering_2, Sub_metering_3 FROM yr_2007")
+yr_2008SELECT <- dbGetQuery(con, "SELECT Date, Time, Global_active_power, Sub_metering_1, Sub_metering_2, Sub_metering_3 FROM yr_2008")
+yr_2009SELECT <- dbGetQuery(con, "SELECT Date, Time, Global_active_power, Sub_metering_1, Sub_metering_2, Sub_metering_3 FROM yr_2009")
+yr_2010SELECT <- dbGetQuery(con, "SELECT Date, Time, Global_active_power, Sub_metering_1, Sub_metering_2, Sub_metering_3 FROM yr_2010")
+```
+CREATE ONE DATAFRAME - ONLY YEARS THAT ARE COMPLETE
+```{r}
+newDF2 <- bind_rows(yr_2007SELECT, yr_2008SELECT, yr_2009SELECT)
+```
+Combine Date & Time attribute values in a new attribute column
+```{r}
+newDF2 <-cbind(newDF2,paste(newDF2$Date,newDF2$Time), stringsAsFactors=FALSE)
+```
+Give the new attribute in the 7th column a header name 
+```{r}
+colnames(newDF2)[7] <-"DateTime"
+```
+Move the DateTime attribute within the dataset
+```{r}
+newDF2 <- newDF2[,c(ncol(newDF2), 1:(ncol(newDF2)-1))]
+```
+Lubridate
+```{r}
+newDF2$DateTime <- ymd_hms(newDF2$DateTime)
+newDF2$Time<-hms(newDF2$Time)
+newDF2$Date<-ymd(newDF2$Date)
+newDF2$year <- year(newDF2$DateTime)
+newDF2$week<-week(newDF2$DateTime)
+newDF2$weekdays<-wday(newDF2$DateTime)
+newDF2$day <- day(newDF2$DateTime)
+newDF2$hour <- hour(newDF2$DateTime)
+newDF2$minute <- minute(newDF2$DateTime)
+newDF2$quarter <- quarter(newDF2$DateTime)
+newDF2$month<-month(newDF2$DateTime)
+
+str(newDF2)
+head(newDF2)
+
+```
+#### 3. MISSING VALUES
+```{r}
+
+#create empty rows
+newDF2 <- pad(newDF2,by="DateTime",break_above=2)
+
+sum(is.na(newDF2))
+
+
+NA_mean <- replace(newDF2,TRUE, lapply(newDF2,na.aggregate))
+
+sum(is.na(NA_mean))
+
+
+```
+
+
+#### 3. Group by month
+```{r}
+
+house_month <- NA_mean%>%
+  group_by(year,month)%>%
+  summarize(month_total=sum(Global_active_power))
+
+ts_month<-ts(house_month$month_total, frequency=12,start(2007,1))
+
+autoplot(ts_month)
+
+
+## Decompose into trend, seasonal and remainder
+decomposed_ts_month <- decompose(ts_month)
+
+autoplot(decomposed_ts_month)
+
+
+## Check variance??????
+variance_ts_month<-apply(decomposed_ts_month,2,var)
+
+##create training and test sets
+
+train_month<-window (ts_month,start(2007,1), end=c(2008,12))
+
+test_month <- window(ts_month,start(2009,1))
+
+##create a Holt Winters model
+HW_month <- HoltWinters(train_month)
+
+##make forecasts
+forecast_HW_month <- forecast:::forecast.HoltWinters(HW_month,h=12)
+
+#check residuals for the model
+autoplot(HW_month)
+
+#plot time series with the forecasts
+autoplot(ts_month) +
+  autolayer(forecast_HW_month$mean)
+
+#check accuracy
+HW_accuracy_month<-accuracy(forecast_HW_month,test_month)
+
+##create an ARIMA model
+AR_month<-auto.arima(train_month)
+
+##make forecasts
+forecast_AR_month<-forecast:::forecast(Arima,train_month,h=12)
+
+#plot time series with the forecasts
+autoplot(ts_month) +
+  autolayer(forecast_AR_month$mean)
+
+#check accuracy
+AR_accuracy_month<-accuracy(forecast_AR_month,test_month)
+
+
+```
+#### 4. Group by week
+```{r}
+house_week <- NA_mean%>%
+  group_by(year,week)%>%
+  summarize(week_total=sum(Global_active_power))
+
+ts_week<-ts(house_week$week_total, frequency=52,start(2007,1))
+
+autoplot(ts_week)
+
+
+## Decompose into trend, seasonal and remainder
+decomposed_ts_week <- decompose(ts_week)
+
+autoplot(decomposed_ts_week)
+
+
+## Check variance??????
+variance_ts_week<-apply(decomposed_ts_week,2,var)
+
+##create training and test sets
+
+train_week<-window (ts_week,start(2007,1), end=c(2008,52))
+
+test_week <- window(ts_week,start(2009,1))
+
+##create a Holt Winters model
+HW_week <- HoltWinters(train_week)
+
+##make forecasts
+forecast_week <- forecast:::forecast.HoltWinters(HW_week,h=7)
+
+#check residuals for the model
+autoplot(HW_week)
+
+#plot time series with the forecasts
+autoplot(ts_week) +
+  autolayer(forecast_week$mean)
+
+#check accuracy
+HW_accuracy_week<-accuracy(forecast_week,test_week)
+```
+#### 4. Group by day
+```{r}
+house_day <- NA_mean%>%
+  group_by(year,month,day)%>%
+  summarize(day_total=sum(Global_active_power))
+
+ts_day<-ts(house_day$day_total, frequency=365,start(2007,1))
+
+autoplot(ts_day)
+
+
+## Decompose into trend, seasonal and remainder
+decomposed_ts_day <- decompose(ts_day)
+
+autoplot(decomposed_ts_day)
+
+
+## Check variance??????
+variance_ts_day<-apply(decomposed_ts_day,2,var)
+
+##create training and test sets
+
+train_day<-window (ts_day,start(2007,1), end=c(2008,365))
+
+test_day <- window(ts_day,start(2009,1))
+
+##create a Holt Winters model
+HW_day <- HoltWinters(train_day)
+
+##make forecasts
+forecast_day <- forecast:::forecast.HoltWinters(HW_day,h=30)
+
+#check residuals for the model
+autoplot(HW_day)
+
+#plot time series with the forecasts
+autoplot(ts_day) +
+  autolayer(forecast_day$mean)
+
+#check accuracy
+HW_accuracy_day<-accuracy(forecast_day,test_day)
+```
