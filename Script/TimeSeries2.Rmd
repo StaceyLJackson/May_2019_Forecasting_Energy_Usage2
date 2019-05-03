@@ -87,7 +87,7 @@ house_month <- NA_mean%>%
 ts_month<-ts(house_month$month_total, frequency=12,start=c(2007,1))
 ts_month
 
-autoplot(ts_month)
+ggplot2::autoplot(ts_month)
 
 
 
@@ -98,13 +98,10 @@ decomposed_ts_month
 ggplot2::autoplot(decomposed_ts_month)
 
 
-
-
-## Check variance??????
+## Check variance
 variance_ts_month<-apply(decomposed_ts_month$time.series,2,var)/var(ts_month)
 variance_ts_month
                          
-
 #create training and test sets
 
 train_month<-window (ts_month,start=c(2007,1), end=c(2010,1))
@@ -122,8 +119,8 @@ checkresiduals(HW_month)
 forecast_HW_month <- forecast:::forecast.HoltWinters(HW_month,h=9)
 
 #plot time series with the forecasts
-ggplot2::autoplot(ts_month) + 
-  ggplot2::autolayer(forecast_HW_month$mean)
+#ggplot2::autoplot(ts_month) + 
+ # ggplot2::autolayer(forecast_HW_month$mean)
 
 #check accuracy
 HW_accuracy_month<-accuracy(forecast_HW_month,test_month)
@@ -132,19 +129,19 @@ HW_accuracy_month<-accuracy(forecast_HW_month,test_month)
 AR_month<-auto.arima(train_month)
 
 #check residuals for the model
-autoplot(AR_month)
+ggplot2::autoplot(AR_month)
 checkresiduals(AR_month)
 
 ##make forecasts
-forecast_AR_month<-forecast:::forecast(AR_month,h=12)
+forecast_AR_month<-forecast:::forecast(AR_month,h=9)
 
 #plot time series with the forecasts
-autoplot(ts_month) +
-  autolayer(forecast_AR_month$mean)
+#ggplot2::autoplot(ts_month) +
+ # ggplot2::autolayer(forecast_AR_month$mean)
 
 #check accuracy
 AR_accuracy_month<-accuracy(forecast_AR_month,test_month)
-
+AR_accuracy_month
 
 ```
 #### 4. Group by week
@@ -153,82 +150,170 @@ house_week <- NA_mean%>%
   group_by(year,week)%>%
   summarize(week_total=sum(Global_active_power))
 
-ts_week<-ts(house_week$week_total, frequency=52,start(2007,1))
+ts_week<-ts(house_week$week_total, frequency=52,start=c(2007,1))
 
-autoplot(ts_week)
+ggplot2::autoplot(ts_week)
 
 
 ## Decompose into trend, seasonal and remainder
-decomposed_ts_week <- decompose(ts_week)
+decomposed_ts_week <- stl(ts_week, s.window = "periodic")
+decomposed_ts_week
 
-autoplot(decomposed_ts_week)
+ggplot2::autoplot(decomposed_ts_month)
 
 
-## Check variance??????
-variance_ts_week<-apply(decomposed_ts_week,2,var)
-
+## Check variance
+variance_ts_week<-apply(decomposed_ts_week$time.series,2,var)/var(ts_week)
+variance_ts_week
 ##create training and test sets
 
-train_week<-window (ts_week,start(2007,1), end=c(2008,52))
+train_week<-window (ts_week,start=c(2007,1), end=c(2010,1))
 
-test_week <- window(ts_week,start(2009,1))
+test_week <- window(ts_week,start=c(2010,2))
 
 ##create a Holt Winters model
 HW_week <- HoltWinters(train_week)
 
 ##make forecasts
-forecast_week <- forecast:::forecast.HoltWinters(HW_week,h=7)
+forecast_week <- forecast:::forecast.HoltWinters(HW_week,h=50)
 
 #check residuals for the model
-autoplot(HW_week)
+ggplot2::autoplot(HW_week)
 checkresiduals(HW_week)
 
 #plot time series with the forecasts
-autoplot(ts_week) +
-  autolayer(forecast_week$mean)
+#ggplot2::autoplot(ts_week) +
+ # ggplot2::autolayer(forecast_week$mean)
 
 #check accuracy
 HW_accuracy_week<-accuracy(forecast_week,test_week)
+HW_accuracy_week
+
+##create an ARIMA model
+AR_week<-auto.arima(train_week)
+
+#check residuals for the model
+ggplot2::autoplot(AR_week)
+checkresiduals(AR_week)
+
+##make forecasts
+forecast_AR_week<-forecast:::forecast(AR_week,h=50)
+
+#plot time series with the forecasts
+#ggplot2::autoplot(ts_week) +
+ # ggplot2::autolayer(forecast_AR_week$mean)
+
+#check accuracy
+AR_accuracy_week<-accuracy(forecast_AR_week,test_week)
+AR_accuracy_week
 ```
 #### 4. Group by day
 ```{r}
 house_day <- NA_mean%>%
-  group_by(year,month,day)%>%
+  group_by(year,day)%>%
   summarize(day_total=sum(Global_active_power))
 
-ts_day<-ts(house_day$day_total, frequency=365,start(2007,1))
+ts_day<-ts(house_day$day_total, frequency=365,start=c(2007,1))
 
-autoplot(ts_day)
+ggplot2::autoplot(ts_day)
 
 
 ## Decompose into trend, seasonal and remainder
-decomposed_ts_day <- decompose(ts_day)
+decomposed_ts_day <- stl(ts_day, s.window = "periodic")
 
-autoplot(decomposed_ts_day)
+ggplot2::autoplot(decomposed_ts_day)
 
 
 ## Check variance??????
-variance_ts_day<-apply(decomposed_ts_day,2,var)
-
+variance_ts_day<-apply(decomposed_ts_day$time.series,2,var)/var(ts_day)
+variance_ts_day
 ##create training and test sets
 
-train_day<-window (ts_day,start(2007,1), end=c(2008,365))
+train_day<-window (ts_day,start=c(2007,1), end=c(2010,1))
 
-test_day <- window(ts_day,start(2009,1))
+test_day <- window(ts_day,start=c(2010,2))
 
 ##create a Holt Winters model
 HW_day <- HoltWinters(train_day)
 
 ##make forecasts
-forecast_day <- forecast:::forecast.HoltWinters(HW_day,h=30)
+forecast_day <- forecast:::forecast.HoltWinters(HW_day,h=363)
 
 #check residuals for the model
-autoplot(HW_day)
+ggplot2::autoplot(HW_day)
 
 #plot time series with the forecasts
-autoplot(ts_day) +
-  autolayer(forecast_day$mean)
+#ggplot2::autoplot(ts_day) +
+ # ggplot2::autolayer(forecast_day$mean)
 
 #check accuracy
 HW_accuracy_day<-accuracy(forecast_day,test_day)
 ```
+By quarter???? WHAT TIME PERIOD FOR THE FORECAST????
+```{r}
+house_quarter <- NA_mean%>%
+  group_by(year,quarter)%>%
+  summarize(month_quarter=sum(Global_active_power))
+
+ts_quarter<-ts(house_quarter$month_quarter, frequency=4,start=c(2007,1))
+ts_quarter
+
+ggplot2::autoplot(ts_quarter)
+
+
+
+# Decompose into trend, seasonal and remainder
+decomposed_ts_quarter <- stl(ts_quarter, s.window = "periodic")
+decomposed_ts_quarter
+
+ggplot2::autoplot(decomposed_ts_quarter)
+
+
+## Check variance
+variance_ts_quarter<-apply(decomposed_ts_quarter$time.series,2,var)/var(ts_quarter)
+variance_ts_quarter
+                         
+#create training and test sets
+
+train_quarter<-window (ts_quarter,start=c(2007,1), end=c(2010,1))
+
+test_quarter <- window(ts_quarter,start=c(2010,2))
+
+##create a Holt Winters model
+HW_quarter <- HoltWinters(train_quarter)
+
+#check residuals for the model
+autoplot(HW_quarter)
+checkresiduals(HW_quarter)
+
+#make forecasts
+forecast_HW_quarter <- forecast:::forecast.HoltWinters(HW_quarter,h=9)
+
+#plot time series with the forecasts
+#ggplot2::autoplot(ts_quarter) + 
+ # ggplot2::autolayer(forecast_HW_quarter$mean)
+
+#check accuracy
+HW_accuracy_quarter<-accuracy(forecast_HW_quarter,test_quarter)
+
+##create an ARIMA model
+AR_month<-auto.arima(train_quarter)
+
+#check residuals for the model
+ggplot2::autoplot(AR_quarter)
+checkresiduals(AR_quarter)
+
+##make forecasts
+forecast_AR_quarter<-forecast:::forecast(AR_quarter,h=9)
+
+#plot time series with the forecasts
+#ggplot2::autoplot(ts_quarter) +
+ # ggplot2::autolayer(forecast_AR_quarter$mean)
+
+#check accuracy
+AR_accuracy_quarter<-accuracy(forecast_AR_quarter,test_quarter)
+AR_accuracy_quarter
+
+```
+```
+
