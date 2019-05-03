@@ -7,9 +7,7 @@ output: html_document
 ####1. Open libraries
 ```{r}
 
-install.packages(c("RMySQL","lubridate","ggplot","padr","zoo","rstudioapi","forecast"))
-
-pacman::p_load(RMySQL, dplyr, lubridate, ggplot2,ggfortify,plotly, forecast,zoo, padr,rstudioapi)
+pacman::p_load(RMySQL, dplyr, lubridate, ggplot2,ggfortify,plotly, forecast,zoo, padr,rstudioapi,stats)
 
 ```
 
@@ -28,7 +26,7 @@ yr_2010SELECT <- dbGetQuery(con, "SELECT Date, Time, Global_active_power, Sub_me
 ```
 CREATE ONE DATAFRAME - ONLY YEARS THAT ARE COMPLETE
 ```{r}
-newDF2 <- bind_rows(yr_2007SELECT, yr_2008SELECT, yr_2009SELECT)
+newDF2 <- bind_rows(yr_2007SELECT, yr_2008SELECT, yr_2009SELECT,yr_2010SELECT)
 ```
 Combine Date & Time attribute values in a new attribute column
 ```{r}
@@ -64,7 +62,8 @@ head(newDF2)
 ```{r}
 
 #create empty rows
-newDF2 <- pad(newDF2,by="DateTime",break_above=2)
+newDF2 <- pad(newDF2,by="DateTime",break_above=3)
+head(newDF2)
 
 sum(is.na(newDF2))
 
@@ -73,7 +72,8 @@ NA_mean <- replace(newDF2,TRUE, lapply(newDF2,na.aggregate))
 
 sum(is.na(NA_mean))
 
-
+head(NA_mean)##TIME HAS DISAPPEARED
+str(NA_mean)
 ```
 
 
@@ -84,26 +84,32 @@ house_month <- NA_mean%>%
   group_by(year,month)%>%
   summarize(month_total=sum(Global_active_power))
 
-ts_month<-ts(house_month$month_total, frequency=12,start(2007,1))
+ts_month<-ts(house_month$month_total, frequency=12,start=c(2007,1))
+ts_month
 
 autoplot(ts_month)
 
 
-## Decompose into trend, seasonal and remainder
-decomposed_ts_month <- decompose(ts_month)
 
-autoplot(decomposed_ts_month)
+# Decompose into trend, seasonal and remainder
+decomposed_ts_month <- stl(ts_month, s.window = "periodic")
+decomposed_ts_month
+
+ggplot2::autoplot(decomposed_ts_month)
+
+
 
 
 ## Check variance??????
-##variance_ts_month<-apply(decomposed_ts_month,2,var)
+variance_ts_month<-apply(decomposed_ts_month$time.series,2,var)/var(ts_month)
+variance_ts_month
                          
 
-##create training and test sets
+#create training and test sets
 
-train_month<-window (ts_month,start(2007,1), end=c(2008,12))
+train_month<-window (ts_month,start=c(2007,1), end=c(2010,1))
 
-test_month <- window(ts_month,start(2009,1))
+test_month <- window(ts_month,start=c(2010,2))
 
 ##create a Holt Winters model
 HW_month <- HoltWinters(train_month)
@@ -112,12 +118,12 @@ HW_month <- HoltWinters(train_month)
 autoplot(HW_month)
 checkresiduals(HW_month)
 
-##make forecasts
-forecast_HW_month <- forecast:::forecast.HoltWinters(HW_month,h=12)
+#make forecasts
+forecast_HW_month <- forecast:::forecast.HoltWinters(HW_month,h=9)
 
 #plot time series with the forecasts
-autoplot(ts_month) +
-  autolayer(forecast_HW_month$mean)
+ggplot2::autoplot(ts_month) + 
+  ggplot2::autolayer(forecast_HW_month$mean)
 
 #check accuracy
 HW_accuracy_month<-accuracy(forecast_HW_month,test_month)
@@ -130,7 +136,7 @@ autoplot(AR_month)
 checkresiduals(AR_month)
 
 ##make forecasts
-forecast_AR_month<-forecast:::forecast.Arima(AR_month,h=12)
+forecast_AR_month<-forecast:::forecast(AR_month,h=12)
 
 #plot time series with the forecasts
 autoplot(ts_month) +
