@@ -7,8 +7,27 @@ output: html_document
 ####1. Open libraries
 ```{r}
 
-pacman::p_load(RMySQL, dplyr, lubridate, ggplot2,ggfortify,plotly, forecast,zoo, padr,rstudioapi,stats)
+current_path = getActiveDocumentContext()$path 
+setwd(dirname(current_path))
+setwd("..")
+rm(current_path)
 
+if(require("pacman")=="FALSE"){
+  install.packages('pacman')
+  library('pacman')
+  pacman::p_load(here, readxl, plyr, caret, dplyr, doParallel,
+                 lubridate, corrplot, ggplot2, 
+                 tidyverse, arules, arulesViz, rstudioapi,RMySQL,
+                 plotly, padr, lubridate, forecast,zoo)
+} else {
+  library('pacman')
+  pacman::p_load(here, readxl, plyr, caret, dplyr, doParallel,
+                 lubridate, corrplot, ggplot2, 
+                 tidyverse, arules, arulesViz, rstudioapi,RMySQL,
+                 plotly, padr, lubridate, forecast,zoo)
+}
+
+saveRDS(newDF2,file="/Users/staceyjackson/Dropbox (Personal)/Ubiqum/May_2019_Forecasting_Energy_Usage2/datasets/NewData.rds")
 ```
 
 ```{r}
@@ -74,22 +93,31 @@ sum(is.na(NA_mean))
 
 head(NA_mean)##TIME HAS DISAPPEARED
 str(NA_mean)
+
+NA_mean <- NA_mean%>%mutate(Global_active_power=Global_active_power*1000/60)
+
+
+
+
 ```
 
 
 #### 3. Group by month
 ```{r}
 
+
 house_month <- NA_mean%>%
-  group_by(year,month)%>%
-  summarize(month_total=sum(Global_active_power))
+  group_by(round(year),round(month))%>%
+  summarize(month_total=sum(Global_active_power)/1000)
+
+x <- rownames(house_month)
+house_month <- cbind(X=x,house_month)
 
 ts_month<-ts(house_month$month_total, frequency=12,start=c(2007,1))
 ts_month
 
+
 ggplot2::autoplot(ts_month)
-
-
 
 # Decompose into trend, seasonal and remainder
 decomposed_ts_month <- stl(ts_month, s.window = "periodic")
@@ -112,15 +140,15 @@ test_month <- window(ts_month,start=c(2010,2))
 HW_month <- HoltWinters(train_month)
 
 #check residuals for the model
-autoplot(HW_month)
+plot(HW_month)
 checkresiduals(HW_month)
 
 #make forecasts
 forecast_HW_month <- forecast:::forecast.HoltWinters(HW_month,h=9)
 
 #plot time series with the forecasts
-#ggplot2::autoplot(ts_month) + 
- # ggplot2::autolayer(forecast_HW_month$mean)
+autoplot(ts_month) + 
+  autolayer(forecast_HW_month$mean)
 
 #check accuracy
 HW_accuracy_month<-accuracy(forecast_HW_month,test_month)
@@ -129,28 +157,30 @@ HW_accuracy_month<-accuracy(forecast_HW_month,test_month)
 AR_month<-auto.arima(train_month)
 
 #check residuals for the model
-ggplot2::autoplot(AR_month)
+plot(AR_month)
 checkresiduals(AR_month)
 
 ##make forecasts
 forecast_AR_month<-forecast:::forecast(AR_month,h=9)
 
 #plot time series with the forecasts
-#ggplot2::autoplot(ts_month) +
- # ggplot2::autolayer(forecast_AR_month$mean)
+autoplot(ts_month) +
+  autolayer(forecast_AR_month$mean)
 
 #check accuracy
 AR_accuracy_month<-accuracy(forecast_AR_month,test_month)
 AR_accuracy_month
 
+
+
 ```
 #### 4. Group by week
 ```{r}
 house_week <- NA_mean%>%
-  group_by(year,week)%>%
+  group_by(year,month, week)%>%
   summarize(week_total=sum(Global_active_power))
 
-ts_week<-ts(house_week$week_total, frequency=52,start=c(2007,1))
+ts_week<-ts(house_week$week_total, frequency=53,start=c(2007,1))
 
 ggplot2::autoplot(ts_week)
 
@@ -159,7 +189,7 @@ ggplot2::autoplot(ts_week)
 decomposed_ts_week <- stl(ts_week, s.window = "periodic")
 decomposed_ts_week
 
-ggplot2::autoplot(decomposed_ts_month)
+autoplot(decomposed_ts_week)
 
 
 ## Check variance
@@ -175,15 +205,15 @@ test_week <- window(ts_week,start=c(2010,2))
 HW_week <- HoltWinters(train_week)
 
 ##make forecasts
-forecast_week <- forecast:::forecast.HoltWinters(HW_week,h=50)
+forecast_week <- forecast:::forecast.HoltWinters(HW_week,h=10)
 
 #check residuals for the model
-ggplot2::autoplot(HW_week)
+plot(HW_week)
 checkresiduals(HW_week)
 
 #plot time series with the forecasts
-#ggplot2::autoplot(ts_week) +
- # ggplot2::autolayer(forecast_week$mean)
+autoplot(ts_week) +
+  autolayer(forecast_week$mean)
 
 #check accuracy
 HW_accuracy_week<-accuracy(forecast_week,test_week)
@@ -193,15 +223,17 @@ HW_accuracy_week
 AR_week<-auto.arima(train_week)
 
 #check residuals for the model
-ggplot2::autoplot(AR_week)
+plot(AR_week)
+
+
 checkresiduals(AR_week)
 
 ##make forecasts
-forecast_AR_week<-forecast:::forecast(AR_week,h=50)
+forecast_AR_week<-forecast:::forecast(AR_week,h=49)
 
 #plot time series with the forecasts
-#ggplot2::autoplot(ts_week) +
- # ggplot2::autolayer(forecast_AR_week$mean)
+autoplot(ts_week) +
+  autolayer(forecast_AR_week$mean)
 
 #check accuracy
 AR_accuracy_week<-accuracy(forecast_AR_week,test_week)
@@ -210,21 +242,24 @@ AR_accuracy_week
 #### 4. Group by day
 ```{r}
 house_day <- NA_mean%>%
-  group_by(year,day)%>%
+  group_by(year, month, week, day)%>%
   summarize(day_total=sum(Global_active_power))
 
-ts_day<-ts(house_day$day_total, frequency=365,start=c(2007,1))
 
-ggplot2::autoplot(ts_day)
+ts_day<-ts(house_day$day_total, frequency=365.25,start=c(2007,1))
+
+
+autoplot(ts_day)
+
 
 
 ## Decompose into trend, seasonal and remainder
 decomposed_ts_day <- stl(ts_day, s.window = "periodic")
 
-ggplot2::autoplot(decomposed_ts_day)
+plot(decomposed_ts_day)
 
 
-## Check variance??????
+## Check variance
 variance_ts_day<-apply(decomposed_ts_day$time.series,2,var)/var(ts_day)
 variance_ts_day
 ##create training and test sets
@@ -237,14 +272,14 @@ test_day <- window(ts_day,start=c(2010,2))
 HW_day <- HoltWinters(train_day)
 
 ##make forecasts
-forecast_day <- forecast:::forecast.HoltWinters(HW_day,h=363)
+forecast_day <- forecast:::forecast.HoltWinters(HW_day,h=20)
 
 #check residuals for the model
-ggplot2::autoplot(HW_day)
+autoplot(HW_day)
 
 #plot time series with the forecasts
-#ggplot2::autoplot(ts_day) +
- # ggplot2::autolayer(forecast_day$mean)
+autoplot(ts_day) +
+  autolayer(forecast_day$mean)
 
 #check accuracy
 HW_accuracy_day<-accuracy(forecast_day,test_day)
@@ -287,17 +322,17 @@ autoplot(HW_quarter)
 checkresiduals(HW_quarter)
 
 #make forecasts
-forecast_HW_quarter <- forecast:::forecast.HoltWinters(HW_quarter,h=9)
+forecast_HW_quarter <- forecast:::forecast.HoltWinters(HW_quarter,h=4)
 
 #plot time series with the forecasts
-#ggplot2::autoplot(ts_quarter) + 
- # ggplot2::autolayer(forecast_HW_quarter$mean)
+ggplot2::autoplot(ts_quarter) + 
+  ggplot2::autolayer(forecast_HW_quarter$mean)
 
 #check accuracy
 HW_accuracy_quarter<-accuracy(forecast_HW_quarter,test_quarter)
 
 ##create an ARIMA model
-AR_month<-auto.arima(train_quarter)
+AR_quarter<-auto.arima(train_quarter)
 
 #check residuals for the model
 ggplot2::autoplot(AR_quarter)
