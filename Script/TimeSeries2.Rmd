@@ -27,7 +27,7 @@ if(require("pacman")=="FALSE"){
                  plotly, padr, lubridate, forecast,zoo)
 }
 
-saveRDS(newDF2,file="/Users/staceyjackson/Dropbox (Personal)/Ubiqum/May_2019_Forecasting_Energy_Usage2/datasets/NewData.rds")
+#saveRDS(newDF2,file="/Users/staceyjackson/Dropbox (Personal)/Ubiqum/May_2019_Forecasting_Energy_Usage2/datasets/NewData.rds")
 ```
 
 ```{r}
@@ -97,7 +97,70 @@ str(NA_mean)
 NA_mean <- NA_mean%>%mutate(Global_active_power=Global_active_power*1000/60)
 
 
+# Creating a table with DateTime and Global Active Power NA's
 
+test_nas <-newDF2 %>%
+ filter(is.na(newDF2$Global_active_power))%>%
+ select(DateTime, Global_active_power)
+
+
+# FYI: lag & lead are for checking previous and next rows
+lag(test_nas$DateTime)[2] #this check the 1st row
+lead(test_nas$DateTime)[2] # this check the 3rd row
+
+
+# Creating a column and assigning the sum of NA's for each day
+# (checking if the previous row is equal to the current row minus 1 minute (60 seconds))
+
+number_nas <- 1
+
+for (i in 1:nrow(test_nas)) {
+
+ if (i==1){
+
+   test_nas$number_nas[i] <- number_nas
+ }
+
+ else if (lag(test_nas$DateTime)[i] == (test_nas$DateTime[i] -60 )){
+
+   number_nas <- number_nas +1
+
+   test_nas$number_nas[i] <- number_nas
+ }
+
+ else {
+
+   number_nas <- 1
+
+   test_nas$number_nas[i] <- number_nas
+ }
+
+}
+
+# Creating a replica df only with DateTime and the number of consecutive NA's minutes
+
+grouped_nas <- test_nas[FALSE,] # same df but with empty values
+grouped_nas$Global_active_power <- NULL #removing Global_active_power column
+
+
+for (i in 1:nrow(test_nas)) {
+
+ if (i==1){
+
+   grouped_nas[1,] <- test_nas[1, c("DateTime", "number_nas") ]
+ }
+
+ else if (test_nas$number_nas[i] == 1){
+
+   grouped_nas <- rbind(grouped_nas, test_nas[i, c("DateTime", "number_nas")])
+
+ }
+
+ else if (test_nas$number_nas[i] != 1){
+
+   grouped_nas[nrow(grouped_nas), "number_nas"] <- grouped_nas[nrow(grouped_nas), "number_nas"] +1
+   }
+}
 
 ```
 
@@ -157,7 +220,6 @@ HW_accuracy_month<-accuracy(forecast_HW_month,test_month)
 AR_month<-auto.arima(train_month)
 
 #check residuals for the model
-plot(AR_month)
 checkresiduals(AR_month)
 
 ##make forecasts
@@ -180,7 +242,7 @@ house_week <- NA_mean%>%
   group_by(year,month, week)%>%
   summarize(week_total=sum(Global_active_power))
 
-ts_week<-ts(house_week$week_total, frequency=53,start=c(2007,1))
+ts_week<-ts(house_week$week_total, frequency=52,start=c(2007,1))
 
 ggplot2::autoplot(ts_week)
 
@@ -204,8 +266,9 @@ test_week <- window(ts_week,start=c(2010,2))
 ##create a Holt Winters model
 HW_week <- HoltWinters(train_week)
 
+
 ##make forecasts
-forecast_week <- forecast:::forecast.HoltWinters(HW_week,h=10)
+forecast_week <- forecast:::forecast.HoltWinters(HW_week,h=89)
 
 #check residuals for the model
 plot(HW_week)
@@ -223,13 +286,11 @@ HW_accuracy_week
 AR_week<-auto.arima(train_week)
 
 #check residuals for the model
-plot(AR_week)
-
 
 checkresiduals(AR_week)
 
 ##make forecasts
-forecast_AR_week<-forecast:::forecast(AR_week,h=49)
+forecast_AR_week<-forecast:::forecast(AR_week,h=89)
 
 #plot time series with the forecasts
 autoplot(ts_week) +
